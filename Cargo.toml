@@ -11,3 +11,12 @@ rustls = ["dep:tokio-rustls"]
 tokio = { version = "1.41.0", default-features = false }
 tokio-native-tls = { version = "0.3.1", default-features = false, optional = true }
 tokio-rustls = { version = "0.26.0", default-features = false, optional = true }
+
+[dev-dependencies]
+byte_string = "1.0.0"
+rustls-native-certs = "0.8.0"
+tokio = { version = "*", default-features = true, features = ["full"] }
+tokio-maybe-tls = { path = ".", features = ["native-tls", "rustls"] }
+tokio-native-tls = { version = "*", default-features = true }
+tokio-rustls = { version = "*", default-features = true }
+webpki-roots = "0.26.6"
