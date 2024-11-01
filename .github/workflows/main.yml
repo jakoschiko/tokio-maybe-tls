@@ -1,0 +1,64 @@
+name: main
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/cache@v4
+      with:
+        path: |
+          # See https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci
+          ~/.cargo/.crates.toml
+          ~/.cargo/.crates2.json
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          # See https://doc.rust-lang.org/cargo/guide/build-cache.html
+          target/
+        key: ${{ runner.os }}|${{ github.job }}|${{ github.run_attempt }}
+        restore-keys: |
+          ${{ runner.os }}|${{ github.job }}
+          ${{ runner.os }}
+
+    - name: Install Rust
+      run: |
+        rustup install 1.75 --profile minimal --no-self-update
+        rustup default 1.75
+        rustup component add rustfmt
+        rustup component add clippy
+        cargo install --locked cargo-hack
+        cargo install --locked cargo-semver-checks
+
+    - name: Check fmt
+      run: cargo fmt --all --check
+
+    - name: Check clippy
+      run: cargo clippy --workspace --all-targets
+
+    - name: Build
+      run: cargo build --all-targets
+
+    - name: Test
+      env:
+        RUST_BACKTRACE: 1
+      run: cargo test -- --format=terse
+
+    - name: Check feature combinations
+      run: cargo hack check --feature-powerset
+
+    - name: Check SemVer
+      run: cargo semver-checks check-release --all-features
