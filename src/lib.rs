@@ -21,6 +21,20 @@ pub enum MaybeTlsStream<S> {
     Tls(TlsStream<S>),
 }
 
+#[cfg(feature = "native-tls")]
+impl<S> From<tokio_native_tls::TlsStream<S>> for MaybeTlsStream<S> {
+    fn from(value: tokio_native_tls::TlsStream<S>) -> Self {
+        Self::Tls(value.into())
+    }
+}
+
+#[cfg(feature = "rustls")]
+impl<S> From<tokio_rustls::client::TlsStream<S>> for MaybeTlsStream<S> {
+    fn from(value: tokio_rustls::client::TlsStream<S>) -> Self {
+        Self::Tls(value.into())
+    }
+}
+
 impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for MaybeTlsStream<S> {
     fn poll_read(
         self: Pin<&mut Self>,
@@ -140,5 +154,19 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for TlsStream<S> {
             #[cfg(feature = "rustls")]
             Self::Rustls(s) => Pin::new(s).poll_shutdown(cx),
         }
+    }
+}
+
+#[cfg(feature = "native-tls")]
+impl<S> From<tokio_native_tls::TlsStream<S>> for TlsStream<S> {
+    fn from(value: tokio_native_tls::TlsStream<S>) -> Self {
+        Self::NativeTls(value)
+    }
+}
+
+#[cfg(feature = "rustls")]
+impl<S> From<tokio_rustls::client::TlsStream<S>> for TlsStream<S> {
+    fn from(value: tokio_rustls::client::TlsStream<S>) -> Self {
+        Self::Rustls(value)
     }
 }
