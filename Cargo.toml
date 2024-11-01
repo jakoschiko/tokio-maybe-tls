@@ -3,4 +3,11 @@ name = "tokio-maybe-tls"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+native-tls = ["dep:tokio-native-tls"]
+rustls = ["dep:tokio-rustls"]
+
 [dependencies]
+tokio = { version = "1.41.0", default-features = false }
+tokio-native-tls = { version = "0.3.1", default-features = false, optional = true }
+tokio-rustls = { version = "0.26.0", default-features = false, optional = true }
