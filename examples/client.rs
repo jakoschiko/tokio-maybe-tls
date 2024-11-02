@@ -15,7 +15,7 @@ async fn main() {
     println!("This example will connect to {host}");
 
     let mut maybe_tls_stream: MaybeTlsStream<TcpStream> = loop {
-        println!("\nPlease enter plain|rustls|native-tls:");
+        println!("\nPlease enter plain|native-tls|rustls:");
 
         let mut input = String::new();
         stdin.read_line(&mut input).await.unwrap();
@@ -25,6 +25,16 @@ async fn main() {
                 let addr = format!("{host}:80");
                 let tcp_stream = TcpStream::connect(addr).await.unwrap();
                 break MaybeTlsStream::Plain(tcp_stream);
+            }
+            "native-tls" => {
+                let addr = format!("{host}:443");
+                let tcp_stream = TcpStream::connect(&addr).await.unwrap();
+                let connector = tokio_native_tls::native_tls::TlsConnector::builder()
+                    .build()
+                    .unwrap();
+                let connector = tokio_native_tls::TlsConnector::from(connector);
+                let tls_stream = connector.connect(host, tcp_stream).await.unwrap();
+                break MaybeTlsStream::Tls(TlsStream::NativeTls(tls_stream));
             }
             "rustls" => {
                 let mut root_store = tokio_rustls::rustls::RootCertStore::empty();
@@ -40,16 +50,6 @@ async fn main() {
                 let tcp_stream = TcpStream::connect(addr).await.unwrap();
                 let tls_stream = connector.connect(dnsname, tcp_stream).await.unwrap();
                 break MaybeTlsStream::Tls(TlsStream::Rustls(tls_stream));
-            }
-            "native-tls" => {
-                let addr = format!("{host}:443");
-                let tcp_stream = TcpStream::connect(&addr).await.unwrap();
-                let connector = tokio_native_tls::native_tls::TlsConnector::builder()
-                    .build()
-                    .unwrap();
-                let connector = tokio_native_tls::TlsConnector::from(connector);
-                let tls_stream = connector.connect(host, tcp_stream).await.unwrap();
-                break MaybeTlsStream::Tls(TlsStream::NativeTls(tls_stream));
             }
             _ => (),
         }
