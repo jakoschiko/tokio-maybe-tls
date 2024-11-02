@@ -1,7 +1,7 @@
-//! Convenience wrapper for streams that allow to switch between plain TCP and different TLS
-//! implementations at runtime.
+//! Convenience wrapper for streams that allows to choose between plain and TLS streams
+//! at runtime.
 //!
-//! A stream can be anything that implement [`AsyncRead`], [`AsyncWrite`] and [`Unpin`].
+//! A stream can be any type that implements [`AsyncRead`], [`AsyncWrite`] and [`Unpin`].
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
@@ -85,15 +85,16 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for MaybeTlsStream<S> {
 
 /// A stream that is encrypted with TLS.
 ///
-/// This enum is non-exhaustive because additional feature-gated implementations might be added
-/// in the future.
+/// This enum is non-exhaustive because the variants are feature gated and a downstream crate
+/// cannot assume which features are enabled due to feature unification. Also additional variants
+/// might be added in the future.
 #[non_exhaustive]
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum TlsStream<S> {
-    /// Hidden variant that exist for technical reasons.
+    /// Hidden variant that exists for technical reasons.
     ///
-    /// Users of this crate must not construct or match this variant.
+    /// Users of this crate must not use this variant in any way.
     #[doc(hidden)]
     None(PhantomData<S>, Infallible),
     /// Encrypted stream using `native-tls`.
