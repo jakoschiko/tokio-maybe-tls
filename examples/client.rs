@@ -1,24 +1,25 @@
-use std::sync::Arc;
-
+#[cfg(any(feature = "async-std-rustls", feature = "async-std-native-tls"))]
+use async_std::net::TcpStream;
 use byte_string::ByteStr;
-use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
-    net::TcpStream,
-};
-use tokio_maybe_tls::{MaybeTlsStream, TlsStream};
+use futures::io::{AsyncReadExt, AsyncWriteExt};
+#[cfg(any(feature = "tokio-rustls", feature = "tokio-native-tls"))]
+use tokio::net::TcpStream;
+use tokio_maybe_tls::MaybeTlsStream;
+use tokio_util::compat::TokioAsyncReadCompatExt;
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() {
-    let mut stdin = BufReader::new(tokio::io::stdin());
+    let stdin = std::io::stdin();
 
     let host = "www.rust-lang.org";
     println!("This example will connect to {host}");
 
+    #[allow(unused_mut)]
     let mut maybe_tls_stream: MaybeTlsStream<TcpStream> = loop {
-        println!("\nPlease enter plain|native-tls|rustls:");
+        println!("\nPlease enter plain|tls:");
 
         let mut input = String::new();
-        stdin.read_line(&mut input).await.unwrap();
+        stdin.read_line(&mut input).unwrap();
 
         match input.trim() {
             "plain" => {
@@ -26,7 +27,8 @@ async fn main() {
                 let tcp_stream = TcpStream::connect(addr).await.unwrap();
                 break MaybeTlsStream::Plain(tcp_stream);
             }
-            "native-tls" => {
+            #[cfg(feature = "tokio-native-tls")]
+            "tls" => {
                 let addr = format!("{host}:443");
                 let tcp_stream = TcpStream::connect(&addr).await.unwrap();
                 let connector = tokio_native_tls::native_tls::TlsConnector::builder()
@@ -34,9 +36,12 @@ async fn main() {
                     .unwrap();
                 let connector = tokio_native_tls::TlsConnector::from(connector);
                 let tls_stream = connector.connect(host, tcp_stream).await.unwrap();
-                break MaybeTlsStream::Tls(TlsStream::NativeTls(tls_stream));
+                break MaybeTlsStream::from(tls_stream);
             }
-            "rustls" => {
+            #[cfg(feature = "tokio-rustls")]
+            "tls" => {
+                use std::sync::Arc;
+
                 let mut root_store = tokio_rustls::rustls::RootCertStore::empty();
                 for cert in rustls_native_certs::load_native_certs().unwrap() {
                     root_store.add(cert).unwrap();
@@ -49,11 +54,29 @@ async fn main() {
                 let addr = format!("{host}:443");
                 let tcp_stream = TcpStream::connect(addr).await.unwrap();
                 let tls_stream = connector.connect(dnsname, tcp_stream).await.unwrap();
-                break MaybeTlsStream::Tls(TlsStream::Rustls(tls_stream));
+                break MaybeTlsStream::from(tls_stream);
+            }
+            #[cfg(feature = "async-std-native-tls")]
+            "tls" => {
+                let addr = format!("{host}:443");
+                let tcp_stream = TcpStream::connect(&addr).await.unwrap();
+                let tls_stream = async_native_tls::connect(host, tcp_stream).await.unwrap();
+                break MaybeTlsStream::from(tls_stream);
+            }
+            #[cfg(feature = "async-std-rustls")]
+            "tls" => {
+                let addr = format!("{host}:443");
+                let tcp_stream = TcpStream::connect(&addr).await.unwrap();
+                let connector = async_tls::TlsConnector::default();
+                let tls_stream = connector.connect(host, tcp_stream).await.unwrap();
+                break MaybeTlsStream::from(tls_stream);
             }
             _ => (),
         }
     };
+
+    #[cfg(any(feature = "tokio-native-tls", feature = "tokio-rustls"))]
+    let mut maybe_tls_stream = maybe_tls_stream.compat();
 
     let content = format!("GET / HTTP/1.0\r\nHost: {host}\r\n\r\n");
     maybe_tls_stream

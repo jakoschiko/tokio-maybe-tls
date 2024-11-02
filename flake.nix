@@ -45,7 +45,8 @@
         in
         {
           default = pkgs.mkShell {
-            buildInputs = [ rust-toolchain ];
+            nativeBuildInputs = with pkgs; [ pkg-config ];
+            buildInputs = with pkgs; [ rust-toolchain openssl.dev ];
           };
         };
 
