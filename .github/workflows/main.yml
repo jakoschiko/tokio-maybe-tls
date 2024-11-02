@@ -36,12 +36,14 @@ jobs:
 
     - name: Install Rust
       run: |
+        rustup install stable --profile minimal --no-self-update
+        rustup default stable
+        cargo install --locked cargo-hack
+        cargo install --locked cargo-semver-checks
         rustup install 1.75 --profile minimal --no-self-update
         rustup default 1.75
         rustup component add rustfmt
         rustup component add clippy
-        cargo install --locked cargo-hack
-        cargo install --locked cargo-semver-checks
 
     - name: Check fmt
       run: cargo fmt --all --check
