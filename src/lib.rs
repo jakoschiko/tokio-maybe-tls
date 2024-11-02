@@ -13,6 +13,7 @@ use std::{
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 /// A stream that might be encrypted with TLS.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum MaybeTlsStream<S> {
     /// Unencrypted stream.
@@ -83,6 +84,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for MaybeTlsStream<S> {
 /// This enum is non-exhaustive because additional feature-gated implementations might be added
 /// in the future.
 #[non_exhaustive]
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum TlsStream<S> {
     /// Hidden variant that exist for technical reasons.
