@@ -60,5 +60,6 @@ jobs:
     - name: Check feature combinations
       run: cargo hack check --feature-powerset
 
-    - name: Check SemVer
-      run: cargo semver-checks check-release --all-features
+    # TODO: enable after first release
+    # - name: Check SemVer
+    #   run: cargo semver-checks check-release --all-features
