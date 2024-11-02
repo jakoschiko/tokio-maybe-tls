@@ -1,6 +1,13 @@
 [package]
 name = "tokio-maybe-tls"
 version = "0.1.0"
+authors = ["Jakob Schikowski"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+description = "Wrapper for plain or TLS streams"
+keywords = ["tokio", "tls"]
+categories = ["asynchronous", "network-programming"]
+repository = "https://github.com/jakoschiko/tokio-maybe-tls"
 edition = "2021"
 
 [features]
