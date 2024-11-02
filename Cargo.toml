@@ -27,3 +27,7 @@ tokio-maybe-tls = { path = ".", features = ["native-tls", "rustls"] }
 tokio-native-tls = { version = "*", default-features = true }
 tokio-rustls = { version = "*", default-features = true }
 webpki-roots = "0.26.6"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

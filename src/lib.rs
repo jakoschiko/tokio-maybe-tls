@@ -3,6 +3,8 @@
 //!
 //! A stream can be anything that implement [`AsyncRead`], [`AsyncWrite`] and [`Unpin`].
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 use std::{
     convert::Infallible,
     marker::PhantomData,
@@ -23,6 +25,7 @@ pub enum MaybeTlsStream<S> {
 }
 
 #[cfg(feature = "native-tls")]
+#[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
 impl<S> From<tokio_native_tls::TlsStream<S>> for MaybeTlsStream<S> {
     fn from(value: tokio_native_tls::TlsStream<S>) -> Self {
         Self::Tls(value.into())
@@ -30,6 +33,7 @@ impl<S> From<tokio_native_tls::TlsStream<S>> for MaybeTlsStream<S> {
 }
 
 #[cfg(feature = "rustls")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
 impl<S> From<tokio_rustls::client::TlsStream<S>> for MaybeTlsStream<S> {
     fn from(value: tokio_rustls::client::TlsStream<S>) -> Self {
         Self::Tls(value.into())
@@ -94,9 +98,11 @@ pub enum TlsStream<S> {
     None(PhantomData<S>, Infallible),
     /// Encrypted stream using `native-tls`.
     #[cfg(feature = "native-tls")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
     NativeTls(tokio_native_tls::TlsStream<S>),
     /// Encrypted stream using `rustls`.
     #[cfg(feature = "rustls")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
     Rustls(tokio_rustls::client::TlsStream<S>),
 }
 
@@ -160,6 +166,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for TlsStream<S> {
 }
 
 #[cfg(feature = "native-tls")]
+#[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
 impl<S> From<tokio_native_tls::TlsStream<S>> for TlsStream<S> {
     fn from(value: tokio_native_tls::TlsStream<S>) -> Self {
         Self::NativeTls(value)
@@ -167,6 +174,7 @@ impl<S> From<tokio_native_tls::TlsStream<S>> for TlsStream<S> {
 }
 
 #[cfg(feature = "rustls")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
 impl<S> From<tokio_rustls::client::TlsStream<S>> for TlsStream<S> {
     fn from(value: tokio_rustls::client::TlsStream<S>) -> Self {
         Self::Rustls(value)
