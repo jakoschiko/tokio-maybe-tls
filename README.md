@@ -1,13 +1,16 @@
 # tokio-maybe-tls
 
-Convenience wrapper for streams that allow to switch between plain TCP and different TLS
-implementations at runtime.
+Convenience wrapper for streams that allows to choose between plain and TLS streams
+at runtime.
 
-Currently supported:
+The wrapper consists of two enums, `MaybeTlsStream` and `TlsStream`, with variants
+for all possible cases. Currently supported:
 
-- plain TCP
+- plain
 - TLS with [`tokio-rustls`]
 - TLS with [`tokio-native-tls`]
+
+All TLS implementations are optional features and disabled by default.
 
 [`tokio-rustls`]: https://crates.io/crates/tokio-rustls
 [`tokio-native-tls`]: https://crates.io/crates/tokio-native-tls
