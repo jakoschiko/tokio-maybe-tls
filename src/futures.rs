@@ -1,6 +1,6 @@
-//! # Tokio extensions
+//! # Futures extensions
 //!
-//! This module gathers tools to manipulate streams based on tokio
+//! This module gathers tools to manipulate streams based on futures
 //! extensions [`AsyncRead`] and [`AsyncWrite`].
 
 use std::{
@@ -10,61 +10,61 @@ use std::{
     task::{Context, Poll},
 };
 
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use futures_io::{AsyncRead, AsyncWrite};
 
 use crate::{MaybeTlsStream, Stream};
 
-/// Tokio extensions trait.
+/// Futures extensions trait.
 ///
 /// This trait is just an alias for [`AsyncRead`], [`AsyncWrite`] and
 /// [`Unpin`], so that it can be used inside a [`Box`]. This trait is
 /// used by the plain and the TLS stream variants.
-pub trait TokioExt: AsyncRead + AsyncWrite + Unpin {}
+pub trait FuturesExt: AsyncRead + AsyncWrite + Unpin {}
 
-/// Tokio extensions automatic implementation.
+/// Futures extensions automatic implementation.
 ///
 /// Everything that is [`AsyncRead`] + [`AsyncWrite`] + [`Unpin`]
-/// automatically implements [`TokioExt`].
-impl<T: AsyncRead + AsyncWrite + Unpin> TokioExt for T {}
+/// automatically implements [`FuturesExt`].
+impl<T: AsyncRead + AsyncWrite + Unpin> FuturesExt for T {}
 
-/// Concrete wrapper for tokio extensions.
+/// Concrete wrapper for futures extensions.
 ///
-/// This structure is a simple wrapper around tokio extensions
-/// [`TokioExt`]. It gather streams that share common tokio
+/// This structure is a simple wrapper around futures extensions
+/// [`FuturesExt`]. It gather streams that share common futures
 /// extensions.
-pub struct Tokio<S: TokioExt>(PhantomData<S>);
+pub struct Futures<S: FuturesExt>(PhantomData<S>);
 
-/// [`Stream`] implementation for [`Tokio`] structure.
+/// [`Stream`] implementation for [`Futures`] structure.
 ///
 /// The plain type is generic, whereas the TLS type is dynamic so that
 /// it can be adjusted at runtime.
-impl<S: TokioExt> Stream for Tokio<S> {
+impl<S: FuturesExt> Stream for Futures<S> {
     type Plain = S;
-    type Tls = Box<dyn TokioExt>;
+    type Tls = Box<dyn FuturesExt>;
 }
 
-/// Specific implementations for the tokio extensions-based
+/// Specific implementations for the futures extensions-based
 /// [`MaybeTlsStream`].
-impl<S: TokioExt> MaybeTlsStream<Tokio<S>> {
-    /// Creates a [`MaybeTlsStream::Tls`] variant from the given tokio
-    /// extensions-based stream.
-    pub fn tokio_tls<T: TokioExt + 'static>(stream: T) -> Self {
+impl<S: FuturesExt> MaybeTlsStream<Futures<S>> {
+    /// Creates a [`MaybeTlsStream::Tls`] variant from the given
+    /// futures extensions-based stream.
+    pub fn futures_tls<T: FuturesExt + 'static>(stream: T) -> Self {
         Self::Tls(Box::new(stream))
     }
 }
 
-/// [`AsyncRead`] implementation of the tokio extensions-based
+/// [`AsyncRead`] implementation of the futures extensions-based
 /// [`MaybeTlsStream`].
 impl<S: Stream> AsyncRead for MaybeTlsStream<S>
 where
-    S::Plain: TokioExt,
-    S::Tls: TokioExt,
+    S::Plain: FuturesExt,
+    S::Tls: FuturesExt,
 {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<Result<()>> {
+        buf: &mut [u8],
+    ) -> Poll<Result<usize>> {
         match self.get_mut() {
             Self::Plain(stream) => Pin::new(stream).poll_read(cx, buf),
             Self::Tls(stream) => Pin::new(stream).poll_read(cx, buf),
@@ -72,12 +72,12 @@ where
     }
 }
 
-/// [`AsyncWrite`] implementation of the tokio extensions-based
+/// [`AsyncWrite`] implementation of the futures extensions-based
 /// [`MaybeTlsStream`].
 impl<S: Stream> AsyncWrite for MaybeTlsStream<S>
 where
-    S::Plain: TokioExt,
-    S::Tls: TokioExt,
+    S::Plain: FuturesExt,
+    S::Tls: FuturesExt,
 {
     fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
         match self.get_mut() {
@@ -93,10 +93,10 @@ where
         }
     }
 
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         match self.get_mut() {
-            Self::Plain(stream) => Pin::new(stream).poll_shutdown(cx),
-            Self::Tls(stream) => Pin::new(stream).poll_shutdown(cx),
+            Self::Plain(stream) => Pin::new(stream).poll_close(cx),
+            Self::Tls(stream) => Pin::new(stream).poll_close(cx),
         }
     }
 }

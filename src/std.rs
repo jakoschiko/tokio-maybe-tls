@@ -1,32 +1,61 @@
+//! # Standard extensions
+//!
+//! This module gathers tools to manipulate streams based on standard
+//! extensions [`Read`] and [`Write`].
+
 use std::{
     io::{Read, Result, Write},
-    net::TcpStream,
+    marker::PhantomData,
 };
 
-pub trait TlsStream<S: Read + Write>: Read + Write {}
+use crate::{MaybeTlsStream, Stream};
 
-impl<T: Read + Write, S: Read + Write> TlsStream<S> for T {}
+/// Standard extensions trait.
+///
+/// This trait is just an alias for [`Read`] + [`Write`], so that it
+/// can be used inside a [`Box`]. This trait is used by the plain and
+/// the TLS stream variants.
+pub trait StdExt: Read + Write {}
 
-/// A stream that might be encrypted with TLS.
-#[allow(clippy::large_enum_variant)]
-pub enum MaybeTlsStream<S> {
-    /// Unencrypted stream.
-    Plain(S),
-    /// Encrypted stream.
-    Tls(Box<dyn TlsStream<S>>),
+/// Standard extensions automatic implementation.
+///
+/// Everything that is [`Read`] + [`Write`] automatically implements
+/// [`StdExt`].
+impl<T: Read + Write> StdExt for T {}
+
+/// Concrete wrapper for standard extensions.
+///
+/// This structure is a simple wrapper around standard extensions
+/// [`StdExt`]. It gather streams that share common standard
+/// extensions.
+pub struct Std<S: StdExt>(PhantomData<S>);
+
+/// [`Stream`] implementation for [`Std`] structure.
+///
+/// The plain type is generic, whereas the TLS type is dynamic so that
+/// it can be adjusted at runtime.
+impl<S: StdExt> Stream for Std<S> {
+    type Plain = S;
+    type Tls = Box<dyn StdExt>;
 }
 
-impl<S: Read + Write> MaybeTlsStream<S> {
-    pub fn plain(stream: S) -> Self {
-        Self::Plain(stream)
-    }
-
-    pub fn tls(stream: Box<dyn TlsStream<S>>) -> Self {
-        Self::Tls(stream)
+/// Specific implementations for the standard extensions-based
+/// [`MaybeTlsStream`].
+impl<S: StdExt> MaybeTlsStream<Std<S>> {
+    /// Creates a [`MaybeTlsStream::Tls`] variant from the given
+    /// standard extensions-based stream.
+    pub fn std_tls<T: StdExt + 'static>(stream: T) -> Self {
+        Self::Tls(Box::new(stream))
     }
 }
 
-impl<S: Read + Write> Read for MaybeTlsStream<S> {
+/// [`Read`] implementation of the standard extensions-based
+/// [`MaybeTlsStream`].
+impl<S: Stream> Read for MaybeTlsStream<S>
+where
+    S::Plain: StdExt,
+    S::Tls: StdExt,
+{
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         match self {
             Self::Plain(stream) => stream.read(buf),
@@ -35,7 +64,13 @@ impl<S: Read + Write> Read for MaybeTlsStream<S> {
     }
 }
 
-impl<S: Read + Write> Write for MaybeTlsStream<S> {
+/// [`Write`] implementation of the standard extensions-based
+/// [`MaybeTlsStream`].
+impl<S: Stream> Write for MaybeTlsStream<S>
+where
+    S::Plain: StdExt,
+    S::Tls: StdExt,
+{
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         match self {
             Self::Plain(stream) => stream.write(buf),
@@ -48,25 +83,5 @@ impl<S: Read + Write> Write for MaybeTlsStream<S> {
             Self::Plain(stream) => stream.flush(),
             Self::Tls(stream) => stream.flush(),
         }
-    }
-}
-
-impl From<TcpStream> for MaybeTlsStream<TcpStream> {
-    fn from(stream: TcpStream) -> Self {
-        MaybeTlsStream::plain(stream)
-    }
-}
-
-#[cfg(feature = "rustls")]
-impl From<rustls::StreamOwned<rustls::ClientConnection, TcpStream>> for MaybeTlsStream<TcpStream> {
-    fn from(stream: rustls::StreamOwned<rustls::ClientConnection, TcpStream>) -> Self {
-        MaybeTlsStream::tls(Box::new(stream))
-    }
-}
-
-#[cfg(feature = "native-tls")]
-impl From<native_tls::TlsStream<TcpStream>> for MaybeTlsStream<TcpStream> {
-    fn from(stream: native_tls::TlsStream<TcpStream>) -> Self {
-        MaybeTlsStream::tls(Box::new(stream))
     }
 }

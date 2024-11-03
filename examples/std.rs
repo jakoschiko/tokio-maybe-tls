@@ -9,14 +9,15 @@ use std::{
 
 use byte_string::ByteStr;
 use rustls_platform_verifier::ConfigVerifierExt;
-use tokio_maybe_tls::std::MaybeTlsStream;
+use tokio_maybe_tls::MaybeTlsStream;
 
 fn main() {
     let host = env::var("HOST").unwrap_or(String::from("www.rust-lang.org"));
+    let host = host.as_str();
+
     println!("This example will connect to {host}");
 
-    #[allow(unused_mut)]
-    let mut stream: MaybeTlsStream<TcpStream> = loop {
+    let mut stream = loop {
         println!("\nPlease enter plain|native-tls|rustls:");
 
         let mut input = String::new();
@@ -24,25 +25,22 @@ fn main() {
 
         match input.trim() {
             "plain" => {
-                let addr = format!("{host}:80");
-                let tcp_stream = TcpStream::connect(addr).unwrap();
-                break MaybeTlsStream::from(tcp_stream);
+                let tcp_stream = TcpStream::connect((host, 80)).unwrap();
+                break MaybeTlsStream::plain(tcp_stream);
             }
             "native-tls" => {
-                let addr = format!("{host}:443");
-                let tcp_stream = TcpStream::connect(&addr).unwrap();
+                let tcp_stream = TcpStream::connect((host, 443)).unwrap();
                 let connector = native_tls::TlsConnector::new().unwrap();
-                let tls_stream = connector.connect(&host, tcp_stream).unwrap();
-                break MaybeTlsStream::from(tls_stream);
+                let tls_stream = connector.connect(host, tcp_stream).unwrap();
+                break MaybeTlsStream::std_tls(tls_stream);
             }
             "rustls" => {
-                let addr = format!("{host}:443");
-                let srv_name = host.clone().try_into().unwrap();
-                let tcp_stream = TcpStream::connect(&addr).unwrap();
+                let srv_name = host.to_owned().try_into().unwrap();
+                let tcp_stream = TcpStream::connect((host, 443)).unwrap();
                 let tls_config = Arc::new(rustls::ClientConfig::with_platform_verifier());
                 let tls_connection = rustls::client::ClientConnection::new(tls_config, srv_name);
                 let tls_stream = rustls::StreamOwned::new(tls_connection.unwrap(), tcp_stream);
-                break MaybeTlsStream::from(tls_stream);
+                break MaybeTlsStream::std_tls(tls_stream);
             }
             _ => continue,
         }
