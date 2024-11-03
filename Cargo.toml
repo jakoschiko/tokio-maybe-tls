@@ -11,31 +11,48 @@ repository = "https://github.com/jakoschiko/tokio-maybe-tls"
 edition = "2021"
 
 [features]
-tokio-rustls = ["dep:tokio", "dep:tokio-rustls", "dep:tokio-util"]
-tokio-native-tls = ["dep:tokio", "dep:tokio-native-tls", "dep:tokio-util"]
-async-std-rustls = ["dep:async-tls"]
+default = []
+full = ["std", "async-std", "tokio", "rustls", "native-tls", "tokio-rustls", "tokio-native-tls", "async-std-rustls", "async-std-native-tls"]
+
+# Runtime
+std = []
+async-std = ["dep:async-std"]
+tokio = ["dep:tokio"]
+
+# Crypto
+rustls = ["dep:rustls"]
+native-tls = ["dep:native-tls"]
+
+# Runtime × Crypto
+tokio-rustls = ["dep:tokio-rustls"]
+tokio-native-tls = ["dep:tokio-native-tls"]
+async-std-rustls = ["dep:futures-rustls"]
 async-std-native-tls = ["dep:async-native-tls"]
-vendored = ["tokio-native-tls?/vendored", "async-native-tls?/vendored"]
+
+# Vendored (mostly for OpenSSL)
+vendored = ["tokio-native-tls?/vendored", "async-native-tls?/vendored", "native-tls?/vendored"]
 
 [dependencies]
-async-native-tls = { version = "0.5.0", default-features = false, features = ["runtime-async-std"], optional = true }
-async-tls = { version = "0.13.0", default-features = false, features = ["client"], optional = true }
-futures-io = "0.3"
-tokio = { version = "1.41.0", default-features = false, optional = true }
+async-native-tls = { version = "0.5.0", optional = true }
+async-std = { version = "1.13.0", optional = true }
+futures-rustls = { version = "0.26.0", default-features = false, optional = true }
+native-tls = { version = "0.2.12", optional = true }
+rustls = { version = "0.23.16", optional = true }
+tokio = { version = "1.41.0", default-features = false, features = ["net"], optional = true }
 tokio-native-tls = { version = "0.3.1", default-features = false, optional = true }
 tokio-rustls = { version = "0.26.0", default-features = false, optional = true }
-tokio-util = { version = "0.7.12", default-features = false, features = ["compat"], optional = true }
 
 [dev-dependencies]
 async-std = { version = "1.13.0", features = ["attributes"] }
 byte_string = "1.0.0"
-futures = "0.3"
-rustls-native-certs = "0.8.0"
+futures-rustls = { version = "0.26.0", default-features = false }
+native-tls = "0.2.12"
+rustls = "0.23.16"
+rustls-platform-verifier = "0.4.0"
 tokio = { version = "*", default-features = true, features = ["full"] }
-tokio-maybe-tls = { path = ".", default-features = false, features = ["tokio-native-tls"] }
+tokio-maybe-tls = { path = ".", features = ["full"] }
 tokio-native-tls = { version = "*", default-features = true }
 tokio-rustls = { version = "*", default-features = true }
-webpki-roots = "0.26.6"
 
 [package.metadata.docs.rs]
 all-features = true

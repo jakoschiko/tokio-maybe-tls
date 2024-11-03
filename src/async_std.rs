@@ -1,60 +1,89 @@
-//! Convenience wrapper for streams that allows to choose between plain and TLS streams
-//! at runtime.
-//!
-//! A stream can be any type that implements [`AsyncRead`], [`AsyncWrite`] and [`Unpin`].
-
 use std::{
     io::Result,
     pin::Pin,
     task::{Context, Poll},
 };
 
-#[cfg(feature = "async-std-native-tls")]
-pub(crate) use async_native_tls::TlsStream;
-#[cfg(feature = "async-std-rustls")]
-pub(crate) use async_tls::client::TlsStream;
-use futures_io::{AsyncRead, AsyncWrite};
+use async_std::{
+    io::{Read, Write},
+    net::TcpStream,
+};
 
-use crate::MaybeTlsStream;
+pub trait TlsStream<S: Read + Write + Unpin>: Read + Write + Unpin {}
 
-impl<S> From<TlsStream<S>> for MaybeTlsStream<S> {
-    fn from(stream: TlsStream<S>) -> Self {
+impl<T: Read + Write + Unpin, S: Read + Write + Unpin> TlsStream<S> for T {}
+
+/// A stream that might be encrypted with TLS.
+#[allow(clippy::large_enum_variant)]
+pub enum MaybeTlsStream<S> {
+    /// Unencrypted stream.
+    Plain(S),
+    /// Encrypted stream.
+    Tls(Box<dyn TlsStream<S>>),
+}
+
+impl<S: Read + Write + Unpin> MaybeTlsStream<S> {
+    pub fn plain(stream: S) -> Self {
+        Self::Plain(stream)
+    }
+
+    pub fn tls(stream: Box<dyn TlsStream<S>>) -> Self {
         Self::Tls(stream)
     }
 }
 
-impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for MaybeTlsStream<S> {
+impl<S: Read + Write + Unpin> Read for MaybeTlsStream<S> {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<Result<usize>> {
         match self.get_mut() {
-            Self::Plain(ref mut s) => Pin::new(s).poll_read(cx, buf),
-            Self::Tls(ref mut s) => Pin::new(s).poll_read(cx, buf),
+            Self::Plain(stream) => Pin::new(stream).poll_read(cx, buf),
+            Self::Tls(stream) => Pin::new(stream).poll_read(cx, buf),
         }
     }
 }
 
-impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for MaybeTlsStream<S> {
+impl<S: Read + Write + Unpin> Write for MaybeTlsStream<S> {
     fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
         match self.get_mut() {
-            Self::Plain(ref mut s) => Pin::new(s).poll_write(cx, buf),
-            Self::Tls(ref mut s) => Pin::new(s).poll_write(cx, buf),
+            Self::Plain(stream) => Pin::new(stream).poll_write(cx, buf),
+            Self::Tls(stream) => Pin::new(stream).poll_write(cx, buf),
         }
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         match self.get_mut() {
-            Self::Plain(ref mut s) => Pin::new(s).poll_flush(cx),
-            Self::Tls(ref mut s) => Pin::new(s).poll_flush(cx),
+            Self::Plain(stream) => Pin::new(stream).poll_flush(cx),
+            Self::Tls(stream) => Pin::new(stream).poll_flush(cx),
         }
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         match self.get_mut() {
-            Self::Plain(ref mut s) => Pin::new(s).poll_close(cx),
-            Self::Tls(ref mut s) => Pin::new(s).poll_close(cx),
+            Self::Plain(stream) => Pin::new(stream).poll_close(cx),
+            Self::Tls(stream) => Pin::new(stream).poll_close(cx),
         }
+    }
+}
+
+impl From<TcpStream> for MaybeTlsStream<TcpStream> {
+    fn from(stream: TcpStream) -> Self {
+        MaybeTlsStream::plain(stream)
+    }
+}
+
+#[cfg(feature = "async-std-rustls")]
+impl From<futures_rustls::client::TlsStream<TcpStream>> for MaybeTlsStream<TcpStream> {
+    fn from(stream: futures_rustls::client::TlsStream<TcpStream>) -> Self {
+        MaybeTlsStream::tls(Box::new(stream))
+    }
+}
+
+#[cfg(feature = "async-std-native-tls")]
+impl From<async_native_tls::TlsStream<TcpStream>> for MaybeTlsStream<TcpStream> {
+    fn from(stream: async_native_tls::TlsStream<TcpStream>) -> Self {
+        MaybeTlsStream::tls(Box::new(stream))
     }
 }

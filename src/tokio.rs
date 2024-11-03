@@ -4,16 +4,30 @@ use std::{
     task::{Context, Poll},
 };
 
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-#[cfg(feature = "tokio-native-tls")]
-pub(crate) use tokio_native_tls::TlsStream;
-#[cfg(feature = "tokio-rustls")]
-pub(crate) use tokio_rustls::client::TlsStream;
+use tokio::{
+    io::{AsyncRead, AsyncWrite, ReadBuf},
+    net::TcpStream,
+};
 
-use crate::MaybeTlsStream;
+pub trait TlsStream<S: AsyncRead + AsyncWrite + Unpin>: AsyncRead + AsyncWrite + Unpin {}
 
-impl<S> From<TlsStream<S>> for MaybeTlsStream<S> {
-    fn from(stream: TlsStream<S>) -> Self {
+impl<T: AsyncRead + AsyncWrite + Unpin, S: AsyncRead + AsyncWrite + Unpin> TlsStream<S> for T {}
+
+/// A stream that might be encrypted with TLS.
+#[allow(clippy::large_enum_variant)]
+pub enum MaybeTlsStream<S> {
+    /// Unencrypted stream.
+    Plain(S),
+    /// Encrypted stream.
+    Tls(Box<dyn TlsStream<S>>),
+}
+
+impl<S: AsyncRead + AsyncWrite + Unpin> MaybeTlsStream<S> {
+    pub fn plain(stream: S) -> Self {
+        Self::Plain(stream)
+    }
+
+    pub fn tls(stream: Box<dyn TlsStream<S>>) -> Self {
         Self::Tls(stream)
     }
 }
@@ -25,8 +39,8 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for MaybeTlsStream<S> {
         buf: &mut ReadBuf<'_>,
     ) -> Poll<Result<()>> {
         match self.get_mut() {
-            Self::Plain(ref mut s) => Pin::new(s).poll_read(cx, buf),
-            Self::Tls(ref mut s) => Pin::new(s).poll_read(cx, buf),
+            Self::Plain(stream) => Pin::new(stream).poll_read(cx, buf),
+            Self::Tls(stream) => Pin::new(stream).poll_read(cx, buf),
         }
     }
 }
@@ -34,22 +48,42 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for MaybeTlsStream<S> {
 impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for MaybeTlsStream<S> {
     fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
         match self.get_mut() {
-            Self::Plain(ref mut s) => Pin::new(s).poll_write(cx, buf),
-            Self::Tls(ref mut s) => Pin::new(s).poll_write(cx, buf),
+            Self::Plain(stream) => Pin::new(stream).poll_write(cx, buf),
+            Self::Tls(stream) => Pin::new(stream).poll_write(cx, buf),
         }
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         match self.get_mut() {
-            Self::Plain(ref mut s) => Pin::new(s).poll_flush(cx),
-            Self::Tls(ref mut s) => Pin::new(s).poll_flush(cx),
+            Self::Plain(stream) => Pin::new(stream).poll_flush(cx),
+            Self::Tls(stream) => Pin::new(stream).poll_flush(cx),
         }
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         match self.get_mut() {
-            Self::Plain(ref mut s) => Pin::new(s).poll_shutdown(cx),
-            Self::Tls(ref mut s) => Pin::new(s).poll_shutdown(cx),
+            Self::Plain(stream) => Pin::new(stream).poll_shutdown(cx),
+            Self::Tls(stream) => Pin::new(stream).poll_shutdown(cx),
         }
+    }
+}
+
+impl From<TcpStream> for MaybeTlsStream<TcpStream> {
+    fn from(stream: TcpStream) -> Self {
+        MaybeTlsStream::plain(stream)
+    }
+}
+
+#[cfg(feature = "tokio-rustls")]
+impl From<tokio_rustls::client::TlsStream<TcpStream>> for MaybeTlsStream<TcpStream> {
+    fn from(stream: tokio_rustls::client::TlsStream<TcpStream>) -> Self {
+        MaybeTlsStream::tls(Box::new(stream))
+    }
+}
+
+#[cfg(feature = "tokio-native-tls")]
+impl From<tokio_native_tls::TlsStream<TcpStream>> for MaybeTlsStream<TcpStream> {
+    fn from(stream: tokio_native_tls::TlsStream<TcpStream>) -> Self {
+        MaybeTlsStream::tls(Box::new(stream))
     }
 }
