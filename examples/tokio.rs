@@ -8,7 +8,7 @@ use tokio::{
     io::{stdin, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     net::TcpStream,
 };
-use tokio_maybe_tls::MaybeTlsStream;
+use tokio_maybe_tls::{tokio::Tokio, MaybeTlsStream};
 
 #[tokio::main]
 async fn main() {
@@ -17,7 +17,7 @@ async fn main() {
 
     println!("This example will connect to {host}");
 
-    let mut stream = loop {
+    let mut stream: MaybeTlsStream<Tokio<TcpStream>> = loop {
         println!("\nPlease enter plain|native-tls|rustls:");
 
         let mut input = String::new();
@@ -32,7 +32,7 @@ async fn main() {
                 let tcp_stream = TcpStream::connect((host, 443)).await.unwrap();
                 let connector = tokio_native_tls::native_tls::TlsConnector::new().unwrap();
                 let connector = tokio_native_tls::TlsConnector::from(connector);
-                let tls_stream = connector.connect(&host, tcp_stream).await.unwrap();
+                let tls_stream = connector.connect(host, tcp_stream).await.unwrap();
                 break MaybeTlsStream::tokio_tls(tls_stream);
             }
             "rustls" => {

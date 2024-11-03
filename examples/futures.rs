@@ -8,7 +8,7 @@ use async_std::{
 };
 use byte_string::ByteStr;
 use rustls_platform_verifier::ConfigVerifierExt;
-use tokio_maybe_tls::MaybeTlsStream;
+use tokio_maybe_tls::{futures::Futures, MaybeTlsStream};
 
 #[async_std::main]
 async fn main() {
@@ -17,7 +17,7 @@ async fn main() {
 
     println!("This example will connect to {host}");
 
-    let mut stream = loop {
+    let mut stream: MaybeTlsStream<Futures<TcpStream>> = loop {
         println!("\nPlease enter plain|native-tls|rustls:");
 
         let mut input = String::new();

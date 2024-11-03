@@ -9,7 +9,7 @@ use std::{
 
 use byte_string::ByteStr;
 use rustls_platform_verifier::ConfigVerifierExt;
-use tokio_maybe_tls::MaybeTlsStream;
+use tokio_maybe_tls::{std::Std, MaybeTlsStream};
 
 fn main() {
     let host = env::var("HOST").unwrap_or(String::from("www.rust-lang.org"));
@@ -17,7 +17,7 @@ fn main() {
 
     println!("This example will connect to {host}");
 
-    let mut stream = loop {
+    let mut stream: MaybeTlsStream<Std<TcpStream>> = loop {
         println!("\nPlease enter plain|native-tls|rustls:");
 
         let mut input = String::new();
