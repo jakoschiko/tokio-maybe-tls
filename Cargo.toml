@@ -11,22 +11,29 @@ repository = "https://github.com/jakoschiko/tokio-maybe-tls"
 edition = "2021"
 
 [features]
-native-tls = ["dep:tokio-native-tls"]
-rustls = ["dep:tokio-rustls"]
+default = []
+
+async-native-tls = ["dep:async-native-tls", "dep:futures-io"]
+futures-rustls = ["dep:futures-io", "dep:futures-rustls"]
+tokio-native-tls = ["dep:tokio-native-tls", "dep:tokio"]
+tokio-rustls = ["dep:tokio-rustls", "dep:tokio"]
 
 [dependencies]
-tokio = { version = "1.41.0", default-features = false }
-tokio-native-tls = { version = "0.3.1", default-features = false, optional = true }
-tokio-rustls = { version = "0.26.0", default-features = false, optional = true }
+async-native-tls = { version = "0.5", optional = true }
+futures-io = { version = "0.3", optional = true }
+futures-rustls = { version = "0.26", default-features = false, optional = true }
+native-tls = { version = "0.2", optional = true }
+rustls = { version = "0.23", optional = true }
+tokio = { version = "1.41.1", default-features = false, optional = true }
+tokio-native-tls = { version = "0.3", default-features = true, optional = true }
+tokio-rustls = { version = "0.26", default-features = true, optional = true }
 
 [dev-dependencies]
+async-std = { version = "1.13.0", features = ["attributes"] }
 byte_string = "1.0.0"
-rustls-native-certs = "0.8.0"
+rustls-platform-verifier = "0.4.0"
 tokio = { version = "*", default-features = true, features = ["full"] }
-tokio-maybe-tls = { path = ".", features = ["native-tls", "rustls"] }
-tokio-native-tls = { version = "*", default-features = true }
-tokio-rustls = { version = "*", default-features = true }
-webpki-roots = "0.26.6"
+tokio-maybe-tls = { path = ".", features = ["rustls", "native-tls", "tokio-rustls", "tokio-native-tls", "futures-rustls", "async-native-tls"] }
 
 [package.metadata.docs.rs]
 all-features = true
