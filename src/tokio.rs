@@ -1,65 +1,60 @@
 //! # Tokio extensions
 //!
-//! This module gathers tools to manipulate streams based on tokio
-//! extensions [`AsyncRead`] and [`AsyncWrite`].
+//! This module exposes an async version of [`MaybeTlsStream`], based
+//! on `tokio` runtime. Encryption can be done with [`tokio_rustls`]
+//! or [`tokio_native_tls`], and I/O is based on [`tokio`] extensions
+//! [`AsyncRead`] and [`AsyncWrite`].
 
 use std::{
     io::Result,
-    marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
 };
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-use crate::{MaybeTlsStream, Stream};
-
-/// Tokio extensions trait.
-///
-/// This trait is just an alias for [`AsyncRead`], [`AsyncWrite`] and
-/// [`Unpin`], so that it can be used inside a [`Box`]. This trait is
-/// used by the plain and the TLS stream variants.
-pub trait TokioExt: AsyncRead + AsyncWrite + Unpin {}
-
-/// Tokio extensions automatic implementation.
-///
-/// Everything that is [`AsyncRead`] + [`AsyncWrite`] + [`Unpin`]
-/// automatically implements [`TokioExt`].
-impl<T: AsyncRead + AsyncWrite + Unpin> TokioExt for T {}
-
-/// Concrete wrapper for tokio extensions.
-///
-/// This structure is a simple wrapper around tokio extensions
-/// [`TokioExt`]. It gather streams that share common tokio
-/// extensions.
-pub struct Tokio<S: TokioExt>(PhantomData<S>);
-
-/// [`Stream`] implementation for [`Tokio`] structure.
-///
-/// The plain type is generic, whereas the TLS type is dynamic so that
-/// it can be adjusted at runtime.
-impl<S: TokioExt> Stream for Tokio<S> {
-    type Plain = S;
-    type Tls = Box<dyn TokioExt>;
+/// A stream that might be encrypted with TLS.
+#[derive(Debug)]
+#[non_exhaustive]
+#[allow(clippy::large_enum_variant)]
+pub enum MaybeTlsStream<S> {
+    /// Unencrypted stream.
+    Plain(S),
+    /// Stream encrypted with [`tokio_rustls`].
+    #[cfg(feature = "tokio-rustls")]
+    TokioRustls(tokio_rustls::client::TlsStream<S>),
+    /// Stream encrypted with [`tokio_native_tls`].
+    #[cfg(feature = "tokio-native-tls")]
+    TokioNativeTls(tokio_native_tls::TlsStream<S>),
 }
 
-/// Specific implementations for the tokio extensions-based
-/// [`MaybeTlsStream`].
-impl<S: TokioExt> MaybeTlsStream<Tokio<S>> {
-    /// Creates a [`MaybeTlsStream::Tls`] variant from the given tokio
-    /// extensions-based stream.
-    pub fn tokio_tls<T: TokioExt + 'static>(stream: T) -> Self {
-        Self::Tls(Box::new(stream))
+impl<S> MaybeTlsStream<S> {
+    /// Creates an unencrypted stream.
+    pub fn plain(stream: impl Into<S>) -> Self {
+        Self::Plain(stream.into())
+    }
+
+    /// Create an encrypted stream.
+    pub fn tls(stream: impl Into<Self>) -> Self {
+        stream.into()
     }
 }
 
-/// [`AsyncRead`] implementation of the tokio extensions-based
-/// [`MaybeTlsStream`].
-impl<S: Stream> AsyncRead for MaybeTlsStream<S>
-where
-    S::Plain: TokioExt,
-    S::Tls: TokioExt,
-{
+#[cfg(feature = "tokio-rustls")]
+impl<S> From<tokio_rustls::client::TlsStream<S>> for MaybeTlsStream<S> {
+    fn from(stream: tokio_rustls::client::TlsStream<S>) -> Self {
+        Self::TokioRustls(stream)
+    }
+}
+
+#[cfg(feature = "tokio-native-tls")]
+impl<S> From<tokio_native_tls::TlsStream<S>> for MaybeTlsStream<S> {
+    fn from(stream: tokio_native_tls::TlsStream<S>) -> Self {
+        Self::TokioNativeTls(stream)
+    }
+}
+
+impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for MaybeTlsStream<S> {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -67,36 +62,42 @@ where
     ) -> Poll<Result<()>> {
         match self.get_mut() {
             Self::Plain(stream) => Pin::new(stream).poll_read(cx, buf),
-            Self::Tls(stream) => Pin::new(stream).poll_read(cx, buf),
+            #[cfg(feature = "tokio-rustls")]
+            Self::TokioRustls(stream) => Pin::new(stream).poll_read(cx, buf),
+            #[cfg(feature = "tokio-native-tls")]
+            Self::TokioNativeTls(stream) => Pin::new(stream).poll_read(cx, buf),
         }
     }
 }
 
-/// [`AsyncWrite`] implementation of the tokio extensions-based
-/// [`MaybeTlsStream`].
-impl<S: Stream> AsyncWrite for MaybeTlsStream<S>
-where
-    S::Plain: TokioExt,
-    S::Tls: TokioExt,
-{
+impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for MaybeTlsStream<S> {
     fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
         match self.get_mut() {
             Self::Plain(stream) => Pin::new(stream).poll_write(cx, buf),
-            Self::Tls(stream) => Pin::new(stream).poll_write(cx, buf),
+            #[cfg(feature = "tokio-rustls")]
+            Self::TokioRustls(stream) => Pin::new(stream).poll_write(cx, buf),
+            #[cfg(feature = "tokio-native-tls")]
+            Self::TokioNativeTls(stream) => Pin::new(stream).poll_write(cx, buf),
         }
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         match self.get_mut() {
             Self::Plain(stream) => Pin::new(stream).poll_flush(cx),
-            Self::Tls(stream) => Pin::new(stream).poll_flush(cx),
+            #[cfg(feature = "tokio-rustls")]
+            Self::TokioRustls(stream) => Pin::new(stream).poll_flush(cx),
+            #[cfg(feature = "tokio-native-tls")]
+            Self::TokioNativeTls(stream) => Pin::new(stream).poll_flush(cx),
         }
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         match self.get_mut() {
             Self::Plain(stream) => Pin::new(stream).poll_shutdown(cx),
-            Self::Tls(stream) => Pin::new(stream).poll_shutdown(cx),
+            #[cfg(feature = "tokio-rustls")]
+            Self::TokioRustls(stream) => Pin::new(stream).poll_shutdown(cx),
+            #[cfg(feature = "tokio-native-tls")]
+            Self::TokioNativeTls(stream) => Pin::new(stream).poll_shutdown(cx),
         }
     }
 }

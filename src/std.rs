@@ -1,87 +1,85 @@
-//! # Standard extensions
+//! # Standard extension
 //!
-//! This module gathers tools to manipulate streams based on standard
-//! extensions [`Read`] and [`Write`].
+//! This module exposes a blocking version of
+//! [`MaybeTlsStream`]. Encryption can be done with [`rustls`] or
+//! [`native_tls`], and I/O is based on standard extensions [`Read`]
+//! and [`Write`].
 
-use std::{
-    io::{Read, Result, Write},
-    marker::PhantomData,
-};
+use std::io::{Read, Result, Write};
 
-use crate::{MaybeTlsStream, Stream};
+/// A stream that might be encrypted with TLS.
+#[derive(Debug)]
+#[non_exhaustive]
+#[allow(clippy::large_enum_variant)]
+pub enum MaybeTlsStream<S: Read + Write> {
+    /// Unencrypted stream.
+    Plain(S),
 
-/// Standard extensions trait.
-///
-/// This trait is just an alias for [`Read`] + [`Write`], so that it
-/// can be used inside a [`Box`]. This trait is used by the plain and
-/// the TLS stream variants.
-pub trait StdExt: Read + Write {}
+    /// Stream encrypted with [`rustls`].
+    #[cfg(feature = "rustls")]
+    Rustls(rustls::StreamOwned<rustls::ClientConnection, S>),
 
-/// Standard extensions automatic implementation.
-///
-/// Everything that is [`Read`] + [`Write`] automatically implements
-/// [`StdExt`].
-impl<T: Read + Write> StdExt for T {}
-
-/// Concrete wrapper for standard extensions.
-///
-/// This structure is a simple wrapper around standard extensions
-/// [`StdExt`]. It gather streams that share common standard
-/// extensions.
-pub struct Std<S: StdExt>(PhantomData<S>);
-
-/// [`Stream`] implementation for [`Std`] structure.
-///
-/// The plain type is generic, whereas the TLS type is dynamic so that
-/// it can be adjusted at runtime.
-impl<S: StdExt> Stream for Std<S> {
-    type Plain = S;
-    type Tls = Box<dyn StdExt>;
+    /// Stream encrypted with [`native_tls`].
+    #[cfg(feature = "native-tls")]
+    NativeTls(native_tls::TlsStream<S>),
 }
 
-/// Specific implementations for the standard extensions-based
-/// [`MaybeTlsStream`].
-impl<S: StdExt> MaybeTlsStream<Std<S>> {
-    /// Creates a [`MaybeTlsStream::Tls`] variant from the given
-    /// standard extensions-based stream.
-    pub fn std_tls<T: StdExt + 'static>(stream: T) -> Self {
-        Self::Tls(Box::new(stream))
+impl<S: Read + Write> MaybeTlsStream<S> {
+    /// Creates an unencrypted stream.
+    pub fn plain(stream: impl Into<S>) -> Self {
+        Self::Plain(stream.into())
+    }
+
+    /// Create an encrypted stream.
+    pub fn tls(stream: impl Into<Self>) -> Self {
+        stream.into()
     }
 }
 
-/// [`Read`] implementation of the standard extensions-based
-/// [`MaybeTlsStream`].
-impl<S: Stream> Read for MaybeTlsStream<S>
-where
-    S::Plain: StdExt,
-    S::Tls: StdExt,
-{
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+#[cfg(feature = "rustls")]
+impl<S: Read + Write> From<rustls::StreamOwned<rustls::ClientConnection, S>> for MaybeTlsStream<S> {
+    fn from(stream: rustls::StreamOwned<rustls::ClientConnection, S>) -> Self {
+        Self::Rustls(stream)
+    }
+}
+
+#[cfg(feature = "native-tls")]
+impl<S: Read + Write> From<native_tls::TlsStream<S>> for MaybeTlsStream<S> {
+    fn from(stream: native_tls::TlsStream<S>) -> Self {
+        Self::NativeTls(stream)
+    }
+}
+
+impl<S: Read + Write> Read for MaybeTlsStream<S> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match self {
             Self::Plain(stream) => stream.read(buf),
-            Self::Tls(stream) => stream.read(buf),
+            #[cfg(feature = "rustls")]
+            Self::Rustls(stream) => stream.read(buf),
+            #[cfg(feature = "native-tls")]
+            Self::NativeTls(stream) => stream.read(buf),
         }
     }
 }
 
-/// [`Write`] implementation of the standard extensions-based
-/// [`MaybeTlsStream`].
-impl<S: Stream> Write for MaybeTlsStream<S>
-where
-    S::Plain: StdExt,
-    S::Tls: StdExt,
-{
+impl<S: Read + Write> Write for MaybeTlsStream<S> {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         match self {
             Self::Plain(stream) => stream.write(buf),
-            Self::Tls(stream) => stream.write(buf),
+            #[cfg(feature = "rustls")]
+            Self::Rustls(stream) => stream.write(buf),
+            #[cfg(feature = "native-tls")]
+            Self::NativeTls(stream) => stream.write(buf),
         }
     }
 
     fn flush(&mut self) -> Result<()> {
         match self {
             Self::Plain(stream) => stream.flush(),
-            Self::Tls(stream) => stream.flush(),
+            #[cfg(feature = "rustls")]
+            Self::Rustls(stream) => stream.flush(),
+            #[cfg(feature = "native-tls")]
+            Self::NativeTls(stream) => stream.flush(),
         }
     }
 }

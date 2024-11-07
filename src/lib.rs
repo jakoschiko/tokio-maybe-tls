@@ -5,35 +5,9 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
-#[cfg(feature = "futures")]
-pub mod futures;
-#[cfg(feature = "std")]
+#[cfg(any(feature = "futures-rustls", feature = "async-native-tls"))]
+pub mod async_std;
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
 pub mod std;
-#[cfg(feature = "tokio")]
+#[cfg(any(feature = "tokio-rustls", feature = "tokio-native-tls"))]
 pub mod tokio;
-
-/// A stream trait composed of a plain and TLS type.
-pub trait Stream {
-    type Plain;
-    type Tls;
-}
-
-/// A stream that might be encrypted with TLS.
-#[allow(clippy::large_enum_variant)]
-pub enum MaybeTlsStream<S: Stream> {
-    /// Unencrypted stream.
-    Plain(S::Plain),
-
-    /// Encrypted stream.
-    Tls(S::Tls),
-}
-
-impl<S: Stream> MaybeTlsStream<S> {
-    pub fn plain(stream: S::Plain) -> Self {
-        Self::Plain(stream)
-    }
-
-    pub fn tls(stream: S::Tls) -> Self {
-        Self::Tls(stream)
-    }
-}

@@ -1,5 +1,4 @@
-#![cfg(feature = "tokio")]
-
+#![cfg(any(feature = "tokio-rustls", feature = "tokio-native-tls"))]
 use std::{env, sync::Arc};
 
 use byte_string::ByteStr;
@@ -8,7 +7,7 @@ use tokio::{
     io::{stdin, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     net::TcpStream,
 };
-use tokio_maybe_tls::{tokio::Tokio, MaybeTlsStream};
+use tokio_maybe_tls::tokio::MaybeTlsStream;
 
 #[tokio::main]
 async fn main() {
@@ -17,7 +16,7 @@ async fn main() {
 
     println!("This example will connect to {host}");
 
-    let mut stream: MaybeTlsStream<Tokio<TcpStream>> = loop {
+    let mut stream: MaybeTlsStream<TcpStream> = loop {
         println!("\nPlease enter plain|native-tls|rustls:");
 
         let mut input = String::new();
@@ -33,7 +32,7 @@ async fn main() {
                 let connector = tokio_native_tls::native_tls::TlsConnector::new().unwrap();
                 let connector = tokio_native_tls::TlsConnector::from(connector);
                 let tls_stream = connector.connect(host, tcp_stream).await.unwrap();
-                break MaybeTlsStream::tokio_tls(tls_stream);
+                break MaybeTlsStream::tls(tls_stream);
             }
             "rustls" => {
                 let srv_name = host.to_owned().try_into().unwrap();
@@ -41,7 +40,7 @@ async fn main() {
                 let tls_config = Arc::new(rustls::ClientConfig::with_platform_verifier());
                 let tls_connector = tokio_rustls::TlsConnector::from(tls_config);
                 let tls_stream = tls_connector.connect(srv_name, tcp_stream).await.unwrap();
-                break MaybeTlsStream::tokio_tls(tls_stream);
+                break MaybeTlsStream::tls(tls_stream);
             }
             _ => continue,
         }
